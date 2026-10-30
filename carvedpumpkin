@@ -1,0 +1,115 @@
+local player = game.Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local hrp = character:WaitForChild("HumanoidRootPart")
+
+local playerModels = workspace:FindFirstChild("PlayerModels")
+if not playerModels then
+    warn("PlayerModels не найден!")
+    return
+end
+
+local TARGET_MESH_ID = "rbxassetid://131264540080104"
+
+local function isPumpkin(model)
+    for _, descendant in ipairs(model:GetDescendants()) do
+        if (descendant:IsA("SpecialMesh") or descendant:IsA("MeshPart")) and descendant.MeshId == TARGET_MESH_ID then
+            return true
+        end
+    end
+    return false
+end
+
+local biggestSize = -math.huge
+local smallestSize = math.huge
+local biggestModel, smallestModel = nil, nil
+local biggestPos, smallestPos = nil, nil
+
+for _, model in ipairs(playerModels:GetChildren()) do
+    if model:IsA("Model") and isPumpkin(model) then
+        local size = model:GetExtentsSize()
+        local height = size.Y
+        
+        if height > biggestSize then
+            biggestSize = height
+            biggestModel = model
+            biggestPos = model:GetPivot().Position
+        end
+        
+        if height < smallestSize then
+            smallestSize = height
+            smallestModel = model
+            smallestPos = model:GetPivot().Position
+        end
+    end
+end
+
+if not biggestModel then
+    warn("Тыквы не найдены!")
+    return
+end
+
+print("Большая:", string.format("%.2f", biggestSize), "стадов")
+print("Маленькая:", string.format("%.2f", smallestSize), "стадов")
+
+-- ===== Маленький UI =====
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "PumpkinTP"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = player:WaitForChild("PlayerGui")
+
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0, 160, 0, 90)
+frame.Position = UDim2.new(0.5, -80, 0.15, 0)
+frame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+frame.BorderSizePixel = 0
+frame.Parent = screenGui
+
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 8)
+corner.Parent = frame
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 24)
+title.BackgroundTransparency = 1
+title.Text = "Тыквы"
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.Font = Enum.Font.GothamBold
+title.TextSize = 14
+title.Parent = frame
+
+local bigBtn = Instance.new("TextButton")
+bigBtn.Size = UDim2.new(0.9, 0, 0, 26)
+bigBtn.Position = UDim2.new(0.05, 0, 0, 30)
+bigBtn.BackgroundColor3 = Color3.fromRGB(40, 140, 40)
+bigBtn.Text = "Большая (" .. string.format("%.1f", biggestSize) .. ")"
+bigBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+bigBtn.Font = Enum.Font.Gotham
+bigBtn.TextSize = 13
+bigBtn.Parent = frame
+
+local bigCorner = Instance.new("UICorner")
+bigCorner.CornerRadius = UDim.new(0, 6)
+bigCorner.Parent = bigBtn
+
+local smallBtn = Instance.new("TextButton")
+smallBtn.Size = UDim2.new(0.9, 0, 0, 26)
+smallBtn.Position = UDim2.new(0.05, 0, 0, 60)
+smallBtn.BackgroundColor3 = Color3.fromRGB(140, 40, 40)
+smallBtn.Text = "Маленькая (" .. string.format("%.1f", smallestSize) .. ")"
+smallBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+smallBtn.Font = Enum.Font.Gotham
+smallBtn.TextSize = 13
+smallBtn.Parent = frame
+
+local smallCorner = Instance.new("UICorner")
+smallCorner.CornerRadius = UDim.new(0, 6)
+smallCorner.Parent = smallBtn
+
+-- ТП
+bigBtn.MouseButton1Click:Connect(function()
+    hrp.CFrame = CFrame.new(biggestPos + Vector3.new(0, biggestSize/2 + 5, 0))
+end)
+
+smallBtn.MouseButton1Click:Connect(function()
+    hrp.CFrame = CFrame.new(smallestPos + Vector3.new(0, smallestSize/2 + 5, 0))
+end)
