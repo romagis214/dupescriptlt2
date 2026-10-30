@@ -1,13 +1,12 @@
-local player = game.Players.LocalPlayer
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+
+local player = Players.LocalPlayer
 local character = player.Character or player.CharacterAdded:Wait()
 local hrp = character:WaitForChild("HumanoidRootPart")
 
 local playerModels = workspace:FindFirstChild("PlayerModels")
-if not playerModels then
-    warn("PlayerModels не найден!")
-    return
-end
-
 local TARGET_MESH_ID = "rbxassetid://131264540080104"
 
 local function isPumpkin(model)
@@ -19,97 +18,242 @@ local function isPumpkin(model)
     return false
 end
 
-local biggestSize = -math.huge
-local smallestSize = math.huge
-local biggestModel, smallestModel = nil, nil
-local biggestPos, smallestPos = nil, nil
+-- Собираем все тыквы
+local pumpkins = {}
 
-for _, model in ipairs(playerModels:GetChildren()) do
-    if model:IsA("Model") and isPumpkin(model) then
-        local size = model:GetExtentsSize()
-        local height = size.Y
-        
-        if height > biggestSize then
-            biggestSize = height
-            biggestModel = model
-            biggestPos = model:GetPivot().Position
-        end
-        
-        if height < smallestSize then
-            smallestSize = height
-            smallestModel = model
-            smallestPos = model:GetPivot().Position
+if playerModels then
+    for _, model in ipairs(playerModels:GetChildren()) do
+        if model:IsA("Model") and isPumpkin(model) then
+            local size = model:GetExtentsSize()
+            table.insert(pumpkins, {
+                Model = model,
+                Height = size.Y,
+                Position = model:GetPivot().Position
+            })
         end
     end
 end
 
-if not biggestModel then
-    warn("Тыквы не найдены!")
-    return
+-- Сортировки
+table.sort(pumpkins, function(a, b) return a.Height > b.Height end)
+local biggest = {}
+for i = 1, math.min(5, #pumpkins) do
+    table.insert(biggest, pumpkins[i])
 end
 
-print("Большая:", string.format("%.2f", biggestSize), "стадов")
-print("Маленькая:", string.format("%.2f", smallestSize), "стадов")
+table.sort(pumpkins, function(a, b) return a.Height < b.Height end)
+local smallest = {}
+for i = 1, math.min(5, #pumpkins) do
+    table.insert(smallest, pumpkins[i])
+end
 
--- ===== Маленький UI =====
+-- ===== UI =====
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "PumpkinTP"
+screenGui.Name = "PumpkinFinder"
 screenGui.ResetOnSpawn = false
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 screenGui.Parent = player:WaitForChild("PlayerGui")
 
-local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0, 160, 0, 90)
-frame.Position = UDim2.new(0.5, -80, 0.15, 0)
-frame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-frame.BorderSizePixel = 0
-frame.Parent = screenGui
+local main = Instance.new("Frame")
+main.Name = "Main"
+main.Size = UDim2.new(0, 340, 0, 420)
+main.Position = UDim2.new(0.5, -170, 0.5, -210)
+main.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
+main.BorderSizePixel = 0
+main.Active = true
+main.Parent = screenGui
 
-local corner = Instance.new("UICorner")
-corner.CornerRadius = UDim.new(0, 8)
-corner.Parent = frame
+local mainCorner = Instance.new("UICorner")
+mainCorner.CornerRadius = UDim.new(0, 12)
+mainCorner.Parent = main
+
+local stroke = Instance.new("UIStroke")
+stroke.Color = Color3.fromRGB(60, 60, 70)
+stroke.Thickness = 1.5
+stroke.Parent = main
+
+-- Заголовок (для перетаскивания)
+local titleBar = Instance.new("Frame")
+titleBar.Size = UDim2.new(1, 0, 0, 42)
+titleBar.BackgroundColor3 = Color3.fromRGB(28, 28, 34)
+titleBar.BorderSizePixel = 0
+titleBar.Parent = main
+
+local titleCorner = Instance.new("UICorner")
+titleCorner.CornerRadius = UDim.new(0, 12)
+titleCorner.Parent = titleBar
+
+local titleFix = Instance.new("Frame")
+titleFix.Size = UDim2.new(1, 0, 0, 16)
+titleFix.Position = UDim2.new(0, 0, 1, -16)
+titleFix.BackgroundColor3 = Color3.fromRGB(28, 28, 34)
+titleFix.BorderSizePixel = 0
+titleFix.Parent = titleBar
 
 local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1, 0, 0, 24)
+title.Size = UDim2.new(1, -50, 1, 0)
+title.Position = UDim2.new(0, 14, 0, 0)
 title.BackgroundTransparency = 1
-title.Text = "Тыквы"
-title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.Text = "Pumpkin Finder"
+title.TextColor3 = Color3.fromRGB(255, 200, 80)
 title.Font = Enum.Font.GothamBold
-title.TextSize = 14
-title.Parent = frame
+title.TextSize = 16
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.Parent = titleBar
 
-local bigBtn = Instance.new("TextButton")
-bigBtn.Size = UDim2.new(0.9, 0, 0, 26)
-bigBtn.Position = UDim2.new(0.05, 0, 0, 30)
-bigBtn.BackgroundColor3 = Color3.fromRGB(40, 140, 40)
-bigBtn.Text = "Большая (" .. string.format("%.1f", biggestSize) .. ")"
-bigBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-bigBtn.Font = Enum.Font.Gotham
-bigBtn.TextSize = 13
-bigBtn.Parent = frame
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size = UDim2.new(0, 32, 0, 32)
+closeBtn.Position = UDim2.new(1, -38, 0, 5)
+closeBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+closeBtn.Text = "✕"
+closeBtn.TextColor3 = Color3.fromRGB(220, 220, 220)
+closeBtn.Font = Enum.Font.GothamBold
+closeBtn.TextSize = 14
+closeBtn.Parent = titleBar
 
-local bigCorner = Instance.new("UICorner")
-bigCorner.CornerRadius = UDim.new(0, 6)
-bigCorner.Parent = bigBtn
+local closeCorner = Instance.new("UICorner")
+closeCorner.CornerRadius = UDim.new(0, 8)
+closeCorner.Parent = closeBtn
 
-local smallBtn = Instance.new("TextButton")
-smallBtn.Size = UDim2.new(0.9, 0, 0, 26)
-smallBtn.Position = UDim2.new(0.05, 0, 0, 60)
-smallBtn.BackgroundColor3 = Color3.fromRGB(140, 40, 40)
-smallBtn.Text = "Маленькая (" .. string.format("%.1f", smallestSize) .. ")"
-smallBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-smallBtn.Font = Enum.Font.Gotham
-smallBtn.TextSize = 13
-smallBtn.Parent = frame
-
-local smallCorner = Instance.new("UICorner")
-smallCorner.CornerRadius = UDim.new(0, 6)
-smallCorner.Parent = smallBtn
-
--- ТП
-bigBtn.MouseButton1Click:Connect(function()
-    hrp.CFrame = CFrame.new(biggestPos + Vector3.new(0, biggestSize/2 + 5, 0))
+closeBtn.MouseButton1Click:Connect(function()
+    screenGui:Destroy()
 end)
 
-smallBtn.MouseButton1Click:Connect(function()
-    hrp.CFrame = CFrame.new(smallestPos + Vector3.new(0, smallestSize/2 + 5, 0))
+-- Контейнер контента
+local content = Instance.new("Frame")
+content.Size = UDim2.new(1, -20, 1, -56)
+content.Position = UDim2.new(0, 10, 0, 48)
+content.BackgroundTransparency = 1
+content.Parent = main
+
+local listLayout = Instance.new("UIListLayout")
+listLayout.Padding = UDim.new(0, 10)
+listLayout.Parent = content
+
+-- Функция создания секции
+local function createSection(parent, titleText, color, data, isBig)
+    local section = Instance.new("Frame")
+    section.Size = UDim2.new(1, 0, 0, 160)
+    section.BackgroundColor3 = Color3.fromRGB(26, 26, 32)
+    section.BorderSizePixel = 0
+    section.Parent = parent
+
+    local secCorner = Instance.new("UICorner")
+    secCorner.CornerRadius = UDim.new(0, 10)
+    secCorner.Parent = section
+
+    local secTitle = Instance.new("TextLabel")
+    secTitle.Size = UDim2.new(1, -16, 0, 28)
+    secTitle.Position = UDim2.new(0, 12, 0, 6)
+    secTitle.BackgroundTransparency = 1
+    secTitle.Text = titleText
+    secTitle.TextColor3 = color
+    secTitle.Font = Enum.Font.GothamBold
+    secTitle.TextSize = 14
+    secTitle.TextXAlignment = Enum.TextXAlignment.Left
+    secTitle.Parent = section
+
+    local scroll = Instance.new("ScrollingFrame")
+    scroll.Size = UDim2.new(1, -16, 1, -40)
+    scroll.Position = UDim2.new(0, 8, 0, 34)
+    scroll.BackgroundTransparency = 1
+    scroll.BorderSizePixel = 0
+    scroll.ScrollBarThickness = 4
+    scroll.ScrollBarImageColor3 = Color3.fromRGB(80, 80, 90)
+    scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+    scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    scroll.Parent = section
+
+    local scrollLayout = Instance.new("UIListLayout")
+    scrollLayout.Padding = UDim.new(0, 6)
+    scrollLayout.Parent = scroll
+
+    if #data == 0 then
+        local empty = Instance.new("TextLabel")
+        empty.Size = UDim2.new(1, 0, 0, 30)
+        empty.BackgroundTransparency = 1
+        empty.Text = "Тыквы не найдены"
+        empty.TextColor3 = Color3.fromRGB(120, 120, 130)
+        empty.Font = Enum.Font.Gotham
+        empty.TextSize = 13
+        empty.Parent = scroll
+    else
+        for i, pumpkin in ipairs(data) do
+            local btn = Instance.new("TextButton")
+            btn.Size = UDim2.new(1, -4, 0, 32)
+            btn.BackgroundColor3 = Color3.fromRGB(36, 36, 44)
+            btn.Text = ""
+            btn.AutoButtonColor = false
+            btn.Parent = scroll
+
+            local btnCorner = Instance.new("UICorner")
+            btnCorner.CornerRadius = UDim.new(0, 8)
+            btnCorner.Parent = btn
+
+            local rank = Instance.new("TextLabel")
+            rank.Size = UDim2.new(0, 28, 1, 0)
+            rank.BackgroundTransparency = 1
+            rank.Text = "#" .. i
+            rank.TextColor3 = color
+            rank.Font = Enum.Font.GothamBold
+            rank.TextSize = 13
+            rank.Parent = btn
+
+            local heightLabel = Instance.new("TextLabel")
+            heightLabel.Size = UDim2.new(1, -40, 1, 0)
+            heightLabel.Position = UDim2.new(0, 32, 0, 0)
+            heightLabel.BackgroundTransparency = 1
+            heightLabel.Text = string.format("%.2f стадов", pumpkin.Height)
+            heightLabel.TextColor3 = Color3.fromRGB(230, 230, 240)
+            heightLabel.Font = Enum.Font.Gotham
+            heightLabel.TextSize = 13
+            heightLabel.TextXAlignment = Enum.TextXAlignment.Left
+            heightLabel.Parent = btn
+
+            btn.MouseEnter:Connect(function()
+                TweenService:Create(btn, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(50, 50, 62)}):Play()
+            end)
+            btn.MouseLeave:Connect(function()
+                TweenService:Create(btn, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(36, 36, 44)}):Play()
+            end)
+
+            btn.MouseButton1Click:Connect(function()
+                if hrp and hrp.Parent then
+                    hrp.CFrame = CFrame.new(pumpkin.Position + Vector3.new(0, pumpkin.Height/2 + 5, 0))
+                end
+            end)
+        end
+    end
+
+    return section
+end
+
+createSection(content, "Топ-5 самых больших", Color3.fromRGB(255, 140, 60), biggest, true)
+createSection(content, "Топ-5 самых маленьких", Color3.fromRGB(100, 180, 255), smallest, false)
+
+-- ===== Drag =====
+local dragging = false
+local dragStart, startPos
+
+titleBar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = main.Position
+    end
 end)
+
+titleBar.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = false
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local delta = input.Position - dragStart
+        main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end)
+
+print("Pumpkin Finder загружен | Найдено тыкв:", #pumpkins)
