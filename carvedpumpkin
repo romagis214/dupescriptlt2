@@ -1,14 +1,62 @@
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
+local Workspace = game:GetService("Workspace")
 
 local player = Players.LocalPlayer
 local character = player.Character or player.CharacterAdded:Wait()
 local hrp = character:WaitForChild("HumanoidRootPart")
 
-local playerModels = workspace:FindFirstChild("PlayerModels")
 local TARGET_MESH_ID = "rbxassetid://131264540080104"
 
+-- ===== Удаление света =====
+local lightsEnabled = false
+local lightConnection = nil
+local lightLoop = nil
+
+local function cleanLights()
+    for _, v in ipairs(Workspace:GetDescendants()) do
+        if v:IsA("PointLight") or v:IsA("SurfaceLight") or v:IsA("SpotLight") then
+            v:Destroy()
+        end
+    end
+end
+
+local function startLightCleaner()
+    if lightsEnabled then return end
+    lightsEnabled = true
+
+    cleanLights()
+
+    lightConnection = Workspace.DescendantAdded:Connect(function(obj)
+        if obj:IsA("PointLight") or obj:IsA("SurfaceLight") or obj:IsA("SpotLight") then
+            obj:Destroy()
+            return
+        end
+        for _, v in ipairs(obj:GetDescendants()) do
+            if v:IsA("PointLight") or v:IsA("SurfaceLight") or v:IsA("SpotLight") then
+                v:Destroy()
+            end
+        end
+    end)
+
+    lightLoop = task.spawn(function()
+        while lightsEnabled do
+            cleanLights()
+            task.wait(0.5)
+        end
+    end)
+end
+
+local function stopLightCleaner()
+    lightsEnabled = false
+    if lightConnection then
+        lightConnection:Disconnect()
+        lightConnection = nil
+    end
+end
+
+-- ===== Поиск тыкв =====
 local function isPumpkin(model)
     for _, descendant in ipairs(model:GetDescendants()) do
         if (descendant:IsA("SpecialMesh") or descendant:IsA("MeshPart")) and descendant.MeshId == TARGET_MESH_ID then
@@ -18,36 +66,26 @@ local function isPumpkin(model)
     return false
 end
 
--- Собираем все тыквы (если папки нет — просто пустой список)
-local pumpkins = {}
-
-if playerModels then
-    for _, model in ipairs(playerModels:GetChildren()) do
-        if model:IsA("Model") and isPumpkin(model) then
-            local size = model:GetExtentsSize()
-            table.insert(pumpkins, {
-                Model = model,
-                Height = size.Y,
-                Position = model:GetPivot().Position
-            })
+local function getPumpkins()
+    local pumpkins = {}
+    local playerModels = Workspace:FindFirstChild("PlayerModels")
+    
+    if playerModels then
+        for _, model in ipairs(playerModels:GetChildren()) do
+            if model:IsA("Model") and isPumpkin(model) then
+                local size = model:GetExtentsSize()
+                table.insert(pumpkins, {
+                    Model = model,
+                    Height = size.Y,
+                    Position = model:GetPivot().Position
+                })
+            end
         end
     end
+    return pumpkins
 end
 
--- Сортировки
-table.sort(pumpkins, function(a, b) return a.Height > b.Height end)
-local biggest = {}
-for i = 1, math.min(5, #pumpkins) do
-    table.insert(biggest, pumpkins[i])
-end
-
-table.sort(pumpkins, function(a, b) return a.Height < b.Height end)
-local smallest = {}
-for i = 1, math.min(5, #pumpkins) do
-    table.insert(smallest, pumpkins[i])
-end
-
--- ===== UI (грузится всегда) =====
+-- ===== UI =====
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "PumpkinFinder"
 screenGui.ResetOnSpawn = false
@@ -56,8 +94,8 @@ screenGui.Parent = player:WaitForChild("PlayerGui")
 
 local main = Instance.new("Frame")
 main.Name = "Main"
-main.Size = UDim2.new(0, 340, 0, 420)
-main.Position = UDim2.new(0.5, -170, 0.5, -210)
+main.Size = UDim2.new(0, 340, 0, 510)
+main.Position = UDim2.new(0.5, -170, 0.5, -255)
 main.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
 main.BorderSizePixel = 0
 main.Active = true
@@ -91,7 +129,7 @@ titleFix.BorderSizePixel = 0
 titleFix.Parent = titleBar
 
 local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1, -50, 1, 0)
+title.Size = UDim2.new(1, -90, 1, 0)
 title.Position = UDim2.new(0, 14, 0, 0)
 title.BackgroundTransparency = 1
 title.Text = "🎃  Pumpkin Finder"
@@ -101,6 +139,22 @@ title.TextSize = 16
 title.TextXAlignment = Enum.TextXAlignment.Left
 title.Parent = titleBar
 
+-- Refresh
+local refreshBtn = Instance.new("TextButton")
+refreshBtn.Size = UDim2.new(0, 32, 0, 32)
+refreshBtn.Position = UDim2.new(1, -76, 0, 5)
+refreshBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+refreshBtn.Text = "↻"
+refreshBtn.TextColor3 = Color3.fromRGB(220, 220, 220)
+refreshBtn.Font = Enum.Font.GothamBold
+refreshBtn.TextSize = 18
+refreshBtn.Parent = titleBar
+
+local refreshCorner = Instance.new("UICorner")
+refreshCorner.CornerRadius = UDim.new(0, 8)
+refreshCorner.Parent = refreshBtn
+
+-- Close
 local closeBtn = Instance.new("TextButton")
 closeBtn.Size = UDim2.new(0, 32, 0, 32)
 closeBtn.Position = UDim2.new(1, -38, 0, 5)
@@ -116,12 +170,13 @@ closeCorner.CornerRadius = UDim.new(0, 8)
 closeCorner.Parent = closeBtn
 
 closeBtn.MouseButton1Click:Connect(function()
+    stopLightCleaner()
     screenGui:Destroy()
 end)
 
 -- Контент
 local content = Instance.new("Frame")
-content.Size = UDim2.new(1, -20, 1, -56)
+content.Size = UDim2.new(1, -20, 1, -100)
 content.Position = UDim2.new(0, 10, 0, 48)
 content.BackgroundTransparency = 1
 content.Parent = main
@@ -130,9 +185,38 @@ local listLayout = Instance.new("UIListLayout")
 listLayout.Padding = UDim.new(0, 10)
 listLayout.Parent = content
 
+-- Кнопка света (внизу)
+local lightBtn = Instance.new("TextButton")
+lightBtn.Size = UDim2.new(1, -20, 0, 36)
+lightBtn.Position = UDim2.new(0, 10, 1, -46)
+lightBtn.BackgroundColor3 = Color3.fromRGB(50, 40, 40)
+lightBtn.Text = "💡  Убрать свет: ВЫКЛ"
+lightBtn.TextColor3 = Color3.fromRGB(220, 180, 180)
+lightBtn.Font = Enum.Font.GothamBold
+lightBtn.TextSize = 14
+lightBtn.Parent = main
+
+local lightCorner = Instance.new("UICorner")
+lightCorner.CornerRadius = UDim.new(0, 8)
+lightCorner.Parent = lightBtn
+
+lightBtn.MouseButton1Click:Connect(function()
+    if lightsEnabled then
+        stopLightCleaner()
+        lightBtn.Text = "💡  Убрать свет: ВЫКЛ"
+        lightBtn.BackgroundColor3 = Color3.fromRGB(50, 40, 40)
+        lightBtn.TextColor3 = Color3.fromRGB(220, 180, 180)
+    else
+        startLightCleaner()
+        lightBtn.Text = "💡  Убрать свет: ВКЛ"
+        lightBtn.BackgroundColor3 = Color3.fromRGB(40, 60, 40)
+        lightBtn.TextColor3 = Color3.fromRGB(180, 255, 180)
+    end
+end)
+
 local function createSection(parent, titleText, color, data)
     local section = Instance.new("Frame")
-    section.Size = UDim2.new(1, 0, 0, 160)
+    section.Size = UDim2.new(1, 0, 0, 170)
     section.BackgroundColor3 = Color3.fromRGB(26, 26, 32)
     section.BorderSizePixel = 0
     section.Parent = parent
@@ -225,8 +309,41 @@ local function createSection(parent, titleText, color, data)
     end
 end
 
-createSection(content, "🔥  Топ-5 самых больших", Color3.fromRGB(255, 140, 60), biggest)
-createSection(content, "❄️  Топ-5 самых маленьких", Color3.fromRGB(100, 180, 255), smallest)
+local function refreshUI()
+    for _, child in ipairs(content:GetChildren()) do
+        if not child:IsA("UIListLayout") then
+            child:Destroy()
+        end
+    end
+
+    local pumpkins = getPumpkins()
+
+    table.sort(pumpkins, function(a, b) return a.Height > b.Height end)
+    local biggest = {}
+    for i = 1, math.min(5, #pumpkins) do
+        table.insert(biggest, pumpkins[i])
+    end
+
+    table.sort(pumpkins, function(a, b) return a.Height < b.Height end)
+    local smallest = {}
+    for i = 1, math.min(5, #pumpkins) do
+        table.insert(smallest, pumpkins[i])
+    end
+
+    createSection(content, "🔥  Топ-5 самых больших", Color3.fromRGB(255, 140, 60), biggest)
+    createSection(content, "❄️  Топ-5 самых маленьких", Color3.fromRGB(100, 180, 255), smallest)
+
+    print("Обновлено | Найдено тыкв:", #pumpkins)
+end
+
+refreshUI()
+
+refreshBtn.MouseButton1Click:Connect(function()
+    refreshBtn.Text = "..."
+    task.wait(0.15)
+    refreshUI()
+    refreshBtn.Text = "↻"
+end)
 
 -- Drag
 local dragging = false
@@ -253,4 +370,4 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
-print("Pumpkin Finder загружен | Найдено тыкв:", #pumpkins)
+print("Pumpkin Finder загружен")
