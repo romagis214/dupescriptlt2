@@ -6,14 +6,15 @@ local Workspace = game:GetService("Workspace")
 local player = Players.LocalPlayer
 local character = player.Character or player.CharacterAdded:Wait()
 local hrp = character:WaitForChild("HumanoidRootPart")
+local mouse = player:GetMouse()
 
 local CARVED_MESH = "rbxassetid://131264540080104"
 local ORDINARY_MESH = "rbxassetid://84518655214255"
 
--- Режим: "Carved", "Ordinary", "All"
 local currentMode = "All"
+local clickCheckEnabled = false
 
--- ===== Свет =====
+-- ===== Lights =====
 local lightsEnabled = false
 local lightConnection = nil
 
@@ -56,10 +57,10 @@ local function stopLightCleaner()
     end
 end
 
--- ===== Определение типа тыквы =====
+-- ===== Pumpkin detection =====
 local function getPumpkinType(model)
     for _, desc in ipairs(model:GetDescendants()) do
-        if (desc:IsA("SpecialMesh") or desc:IsA("MeshPart")) then
+        if desc:IsA("SpecialMesh") or desc:IsA("MeshPart") then
             if desc.MeshId == CARVED_MESH then
                 return "Carved"
             elseif desc.MeshId == ORDINARY_MESH then
@@ -67,7 +68,6 @@ local function getPumpkinType(model)
             end
         end
     end
-    -- Дополнительная проверка по имени для Ordinary
     if model.Name == "Pumpkin" then
         return "Ordinary"
     end
@@ -93,17 +93,15 @@ local function getPumpkins()
     for _, model in ipairs(playerModels:GetChildren()) do
         if model:IsA("Model") then
             local pType = getPumpkinType(model)
-            if pType then
-                if currentMode == "All" or currentMode == pType then
-                    local size = model:GetExtentsSize()
-                    table.insert(pumpkins, {
-                        Model = model,
-                        Height = size.Y,
-                        Position = model:GetPivot().Position,
-                        Type = pType,
-                        Owner = getOwner(model)
-                    })
-                end
+            if pType and (currentMode == "All" or currentMode == pType) then
+                local size = model:GetExtentsSize()
+                table.insert(pumpkins, {
+                    Model = model,
+                    Height = size.Y,
+                    Position = model:GetPivot().Position,
+                    Type = pType,
+                    Owner = getOwner(model)
+                })
             end
         end
     end
@@ -119,13 +117,12 @@ screenGui.Parent = player:WaitForChild("PlayerGui")
 
 local main = Instance.new("Frame")
 main.Name = "Main"
-main.Size = UDim2.new(0, 380, 0, 560)
-main.Position = UDim2.new(0.5, -190, 0.5, -280)
+main.Size = UDim2.new(0, 380, 0, 620)
+main.Position = UDim2.new(0.5, -190, 0.5, -310)
 main.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
 main.BorderSizePixel = 0
 main.Active = true
 main.Parent = screenGui
-
 Instance.new("UICorner", main).CornerRadius = UDim.new(0, 12)
 
 local stroke = Instance.new("UIStroke")
@@ -133,13 +130,12 @@ stroke.Color = Color3.fromRGB(60, 60, 70)
 stroke.Thickness = 1.5
 stroke.Parent = main
 
--- Title bar
+-- Title
 local titleBar = Instance.new("Frame")
 titleBar.Size = UDim2.new(1, 0, 0, 42)
 titleBar.BackgroundColor3 = Color3.fromRGB(28, 28, 34)
 titleBar.BorderSizePixel = 0
 titleBar.Parent = main
-
 Instance.new("UICorner", titleBar).CornerRadius = UDim.new(0, 12)
 
 local titleFix = Instance.new("Frame")
@@ -184,12 +180,13 @@ Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0, 8)
 
 closeBtn.MouseButton1Click:Connect(function()
     stopLightCleaner()
+    clickCheckEnabled = false
     screenGui:Destroy()
 end)
 
 -- Mode buttons
 local modeFrame = Instance.new("Frame")
-modeFrame.Size = UDim2.new(1, -20, 0, 32)
+modeFrame.Size = UDim2.new(1, -20, 0, 30)
 modeFrame.Position = UDim2.new(0, 10, 0, 50)
 modeFrame.BackgroundTransparency = 1
 modeFrame.Parent = main
@@ -211,7 +208,6 @@ local function createModeButton(text, mode)
     btn.TextSize = 13
     btn.Parent = modeFrame
     Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
-
     modeButtons[mode] = btn
 
     btn.MouseButton1Click:Connect(function()
@@ -232,15 +228,73 @@ end
 createModeButton("Carved", "Carved")
 createModeButton("Ordinary", "Ordinary")
 createModeButton("All", "All")
-
--- Подсветка текущего режима
 modeButtons["All"].BackgroundColor3 = Color3.fromRGB(70, 90, 140)
 modeButtons["All"].TextColor3 = Color3.fromRGB(255, 255, 255)
 
+-- Click Check button
+local clickCheckBtn = Instance.new("TextButton")
+clickCheckBtn.Size = UDim2.new(1, -20, 0, 30)
+clickCheckBtn.Position = UDim2.new(0, 10, 0, 86)
+clickCheckBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+clickCheckBtn.Text = "Click Check: OFF"
+clickCheckBtn.TextColor3 = Color3.fromRGB(200, 200, 210)
+clickCheckBtn.Font = Enum.Font.GothamBold
+clickCheckBtn.TextSize = 13
+clickCheckBtn.Parent = main
+Instance.new("UICorner", clickCheckBtn).CornerRadius = UDim.new(0, 6)
+
+-- Info panel
+local infoFrame = Instance.new("Frame")
+infoFrame.Size = UDim2.new(1, -20, 0, 70)
+infoFrame.Position = UDim2.new(0, 10, 0, 122)
+infoFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 38)
+infoFrame.BorderSizePixel = 0
+infoFrame.Parent = main
+Instance.new("UICorner", infoFrame).CornerRadius = UDim.new(0, 8)
+
+local infoTitle = Instance.new("TextLabel")
+infoTitle.Size = UDim2.new(1, -12, 0, 20)
+infoTitle.Position = UDim2.new(0, 10, 0, 6)
+infoTitle.BackgroundTransparency = 1
+infoTitle.Text = "Click Info"
+infoTitle.TextColor3 = Color3.fromRGB(180, 180, 190)
+infoTitle.Font = Enum.Font.GothamBold
+infoTitle.TextSize = 12
+infoTitle.TextXAlignment = Enum.TextXAlignment.Left
+infoTitle.Parent = infoFrame
+
+local infoLabel = Instance.new("TextLabel")
+infoLabel.Size = UDim2.new(1, -12, 0, 40)
+infoLabel.Position = UDim2.new(0, 10, 0, 26)
+infoLabel.BackgroundTransparency = 1
+infoLabel.Text = "Click on a pumpkin in the world..."
+infoLabel.TextColor3 = Color3.fromRGB(220, 220, 230)
+infoLabel.Font = Enum.Font.Gotham
+infoLabel.TextSize = 13
+infoLabel.TextXAlignment = Enum.TextXAlignment.Left
+infoLabel.TextYAlignment = Enum.TextYAlignment.Top
+infoLabel.TextWrapped = true
+infoLabel.Parent = infoFrame
+
+clickCheckBtn.MouseButton1Click:Connect(function()
+    clickCheckEnabled = not clickCheckEnabled
+    if clickCheckEnabled then
+        clickCheckBtn.Text = "Click Check: ON"
+        clickCheckBtn.BackgroundColor3 = Color3.fromRGB(50, 90, 50)
+        clickCheckBtn.TextColor3 = Color3.fromRGB(180, 255, 180)
+        infoLabel.Text = "Click on a pumpkin in the world"
+    else
+        clickCheckBtn.Text = "Click Check: OFF"
+        clickCheckBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+        clickCheckBtn.TextColor3 = Color3.fromRGB(200, 200, 210)
+        infoLabel.Text = "Click on a pumpkin in the world..."
+    end
+end)
+
 -- Content
 local content = Instance.new("Frame")
-content.Size = UDim2.new(1, -20, 1, -140)
-content.Position = UDim2.new(0, 10, 0, 90)
+content.Size = UDim2.new(1, -20, 1, -250)
+content.Position = UDim2.new(0, 10, 0, 200)
 content.BackgroundTransparency = 1
 content.Parent = main
 
@@ -253,7 +307,7 @@ local lightBtn = Instance.new("TextButton")
 lightBtn.Size = UDim2.new(1, -20, 0, 34)
 lightBtn.Position = UDim2.new(0, 10, 1, -44)
 lightBtn.BackgroundColor3 = Color3.fromRGB(50, 40, 40)
-lightBtn.Text = "Убрать свет: ВЫКЛ"
+lightBtn.Text = "Remove Lighting: OFF"
 lightBtn.TextColor3 = Color3.fromRGB(220, 180, 180)
 lightBtn.Font = Enum.Font.GothamBold
 lightBtn.TextSize = 13
@@ -263,20 +317,41 @@ Instance.new("UICorner", lightBtn).CornerRadius = UDim.new(0, 8)
 lightBtn.MouseButton1Click:Connect(function()
     if lightsEnabled then
         stopLightCleaner()
-        lightBtn.Text = "Убрать свет: ВЫКЛ"
+        lightBtn.Text = "Remove Lighting: OFF"
         lightBtn.BackgroundColor3 = Color3.fromRGB(50, 40, 40)
         lightBtn.TextColor3 = Color3.fromRGB(220, 180, 180)
     else
         startLightCleaner()
-        lightBtn.Text = "Убрать свет: ВКЛ"
+        lightBtn.Text = "Remove Lighting: ON"
         lightBtn.BackgroundColor3 = Color3.fromRGB(40, 60, 40)
         lightBtn.TextColor3 = Color3.fromRGB(180, 255, 180)
     end
 end)
 
+-- Click detection
+mouse.Button1Down:Connect(function()
+    if not clickCheckEnabled then return end
+
+    local target = mouse.Target
+    if not target then return end
+
+    local model = target:FindFirstAncestorOfClass("Model")
+    if not model then return end
+
+    local pType = getPumpkinType(model)
+    if not pType then return end
+
+    local size = model:GetExtentsSize()
+    local owner = getOwner(model)
+    local height = size.Y
+
+    infoLabel.Text = string.format("%s | %.2f studs\nOwner: %s", pType, height, owner)
+    print(string.format("[Click Check] %s | %.2f studs | Owner: %s", pType, height, owner))
+end)
+
 local function createSection(parent, titleText, color, data)
     local section = Instance.new("Frame")
-    section.Size = UDim2.new(1, 0, 0, 190)
+    section.Size = UDim2.new(1, 0, 0, 170)
     section.BackgroundColor3 = Color3.fromRGB(26, 26, 32)
     section.BorderSizePixel = 0
     section.Parent = parent
@@ -320,7 +395,7 @@ local function createSection(parent, titleText, color, data)
         local empty = Instance.new("TextLabel")
         empty.Size = UDim2.new(1, 0, 0, 40)
         empty.BackgroundTransparency = 1
-        empty.Text = "Тыквы не найдены"
+        empty.Text = "No pumpkins found"
         empty.TextColor3 = Color3.fromRGB(120, 120, 130)
         empty.Font = Enum.Font.Gotham
         empty.TextSize = 13
@@ -389,7 +464,7 @@ local function createSection(parent, titleText, color, data)
             btn.MouseButton1Click:Connect(function()
                 if hrp and hrp.Parent then
                     hrp.CFrame = CFrame.new(pumpkin.Position + Vector3.new(0, pumpkin.Height/2 + 5, 0))
-                    print(string.format("[Pumpkin] %s | %.2f studs | Owner: %s", pumpkin.Type, pumpkin.Height, pumpkin.Owner))
+                    print(string.format("[TP] %s | %.2f studs | Owner: %s", pumpkin.Type, pumpkin.Height, pumpkin.Owner))
                 end
             end)
         end
@@ -417,10 +492,10 @@ function refreshUI()
         table.insert(smallest, pumpkins[i])
     end
 
-    createSection(content, "Топ-5 самых больших", Color3.fromRGB(255, 140, 60), biggest)
-    createSection(content, "Топ-5 самых маленьких", Color3.fromRGB(100, 180, 255), smallest)
+    createSection(content, "Top 5 Biggest", Color3.fromRGB(255, 140, 60), biggest)
+    createSection(content, "Top 5 Smallest", Color3.fromRGB(100, 180, 255), smallest)
 
-    print("Обновлено | Режим:", currentMode, "| Найдено:", #pumpkins)
+    print("Refreshed | Mode:", currentMode, "| Found:", #pumpkins)
 end
 
 refreshUI()
@@ -457,4 +532,4 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
-print("Pumpkin Finder загружен")
+print("Pumpkin Finder loaded")
