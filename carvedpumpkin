@@ -342,7 +342,7 @@ refreshBtn.MouseButton1Click:Connect(function()
     refreshBtn.Text = "..."
     task.wait(0.15)
     refreshUI()
-    refreshBtn.Text = ""
+    refreshBtn.Text = "R"
 end)
 
 -- Drag
