@@ -7,12 +7,15 @@ local player = Players.LocalPlayer
 local character = player.Character or player.CharacterAdded:Wait()
 local hrp = character:WaitForChild("HumanoidRootPart")
 
-local TARGET_MESH_ID = "rbxassetid://131264540080104"
+local CARVED_MESH = "rbxassetid://131264540080104"
+local ORDINARY_MESH = "rbxassetid://84518655214255"
 
--- ===== Удаление света =====
+-- Режим: "Carved", "Ordinary", "All"
+local currentMode = "All"
+
+-- ===== Свет =====
 local lightsEnabled = false
 local lightConnection = nil
-local lightLoop = nil
 
 local function cleanLights()
     for _, v in ipairs(Workspace:GetDescendants()) do
@@ -25,9 +28,7 @@ end
 local function startLightCleaner()
     if lightsEnabled then return end
     lightsEnabled = true
-
     cleanLights()
-
     lightConnection = Workspace.DescendantAdded:Connect(function(obj)
         if obj:IsA("PointLight") or obj:IsA("SurfaceLight") or obj:IsA("SpotLight") then
             obj:Destroy()
@@ -39,8 +40,7 @@ local function startLightCleaner()
             end
         end
     end)
-
-    lightLoop = task.spawn(function()
+    task.spawn(function()
         while lightsEnabled do
             cleanLights()
             task.wait(0.5)
@@ -56,29 +56,54 @@ local function stopLightCleaner()
     end
 end
 
--- ===== Поиск тыкв =====
-local function isPumpkin(model)
-    for _, descendant in ipairs(model:GetDescendants()) do
-        if (descendant:IsA("SpecialMesh") or descendant:IsA("MeshPart")) and descendant.MeshId == TARGET_MESH_ID then
-            return true
+-- ===== Определение типа тыквы =====
+local function getPumpkinType(model)
+    for _, desc in ipairs(model:GetDescendants()) do
+        if (desc:IsA("SpecialMesh") or desc:IsA("MeshPart")) then
+            if desc.MeshId == CARVED_MESH then
+                return "Carved"
+            elseif desc.MeshId == ORDINARY_MESH then
+                return "Ordinary"
+            end
         end
     end
-    return false
+    -- Дополнительная проверка по имени для Ordinary
+    if model.Name == "Pumpkin" then
+        return "Ordinary"
+    end
+    return nil
+end
+
+local function getOwner(model)
+    local owner = model:FindFirstChild("Owner")
+    if owner then
+        if owner:IsA("StringValue") or owner:IsA("ObjectValue") then
+            return tostring(owner.Value)
+        end
+        return owner.Name
+    end
+    return "Unknown"
 end
 
 local function getPumpkins()
     local pumpkins = {}
     local playerModels = Workspace:FindFirstChild("PlayerModels")
-    
-    if playerModels then
-        for _, model in ipairs(playerModels:GetChildren()) do
-            if model:IsA("Model") and isPumpkin(model) then
-                local size = model:GetExtentsSize()
-                table.insert(pumpkins, {
-                    Model = model,
-                    Height = size.Y,
-                    Position = model:GetPivot().Position
-                })
+    if not playerModels then return pumpkins end
+
+    for _, model in ipairs(playerModels:GetChildren()) do
+        if model:IsA("Model") then
+            local pType = getPumpkinType(model)
+            if pType then
+                if currentMode == "All" or currentMode == pType then
+                    local size = model:GetExtentsSize()
+                    table.insert(pumpkins, {
+                        Model = model,
+                        Height = size.Y,
+                        Position = model:GetPivot().Position,
+                        Type = pType,
+                        Owner = getOwner(model)
+                    })
+                end
             end
         end
     end
@@ -94,32 +119,28 @@ screenGui.Parent = player:WaitForChild("PlayerGui")
 
 local main = Instance.new("Frame")
 main.Name = "Main"
-main.Size = UDim2.new(0, 340, 0, 510)
-main.Position = UDim2.new(0.5, -170, 0.5, -255)
+main.Size = UDim2.new(0, 380, 0, 560)
+main.Position = UDim2.new(0.5, -190, 0.5, -280)
 main.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
 main.BorderSizePixel = 0
 main.Active = true
 main.Parent = screenGui
 
-local mainCorner = Instance.new("UICorner")
-mainCorner.CornerRadius = UDim.new(0, 12)
-mainCorner.Parent = main
+Instance.new("UICorner", main).CornerRadius = UDim.new(0, 12)
 
 local stroke = Instance.new("UIStroke")
 stroke.Color = Color3.fromRGB(60, 60, 70)
 stroke.Thickness = 1.5
 stroke.Parent = main
 
--- Заголовок
+-- Title bar
 local titleBar = Instance.new("Frame")
 titleBar.Size = UDim2.new(1, 0, 0, 42)
 titleBar.BackgroundColor3 = Color3.fromRGB(28, 28, 34)
 titleBar.BorderSizePixel = 0
 titleBar.Parent = main
 
-local titleCorner = Instance.new("UICorner")
-titleCorner.CornerRadius = UDim.new(0, 12)
-titleCorner.Parent = titleBar
+Instance.new("UICorner", titleBar).CornerRadius = UDim.new(0, 12)
 
 local titleFix = Instance.new("Frame")
 titleFix.Size = UDim2.new(1, 0, 0, 16)
@@ -132,14 +153,13 @@ local title = Instance.new("TextLabel")
 title.Size = UDim2.new(1, -90, 1, 0)
 title.Position = UDim2.new(0, 14, 0, 0)
 title.BackgroundTransparency = 1
-title.Text = "🎃  Pumpkin Finder"
+title.Text = "Pumpkin Finder"
 title.TextColor3 = Color3.fromRGB(255, 200, 80)
 title.Font = Enum.Font.GothamBold
 title.TextSize = 16
 title.TextXAlignment = Enum.TextXAlignment.Left
 title.Parent = titleBar
 
--- Refresh
 local refreshBtn = Instance.new("TextButton")
 refreshBtn.Size = UDim2.new(0, 32, 0, 32)
 refreshBtn.Position = UDim2.new(1, -76, 0, 5)
@@ -147,14 +167,10 @@ refreshBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
 refreshBtn.Text = "R"
 refreshBtn.TextColor3 = Color3.fromRGB(220, 220, 220)
 refreshBtn.Font = Enum.Font.GothamBold
-refreshBtn.TextSize = 18
+refreshBtn.TextSize = 14
 refreshBtn.Parent = titleBar
+Instance.new("UICorner", refreshBtn).CornerRadius = UDim.new(0, 8)
 
-local refreshCorner = Instance.new("UICorner")
-refreshCorner.CornerRadius = UDim.new(0, 8)
-refreshCorner.Parent = refreshBtn
-
--- Close
 local closeBtn = Instance.new("TextButton")
 closeBtn.Size = UDim2.new(0, 32, 0, 32)
 closeBtn.Position = UDim2.new(1, -38, 0, 5)
@@ -164,51 +180,95 @@ closeBtn.TextColor3 = Color3.fromRGB(220, 220, 220)
 closeBtn.Font = Enum.Font.GothamBold
 closeBtn.TextSize = 14
 closeBtn.Parent = titleBar
-
-local closeCorner = Instance.new("UICorner")
-closeCorner.CornerRadius = UDim.new(0, 8)
-closeCorner.Parent = closeBtn
+Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0, 8)
 
 closeBtn.MouseButton1Click:Connect(function()
     stopLightCleaner()
     screenGui:Destroy()
 end)
 
--- Контент
+-- Mode buttons
+local modeFrame = Instance.new("Frame")
+modeFrame.Size = UDim2.new(1, -20, 0, 32)
+modeFrame.Position = UDim2.new(0, 10, 0, 50)
+modeFrame.BackgroundTransparency = 1
+modeFrame.Parent = main
+
+local modeLayout = Instance.new("UIListLayout")
+modeLayout.FillDirection = Enum.FillDirection.Horizontal
+modeLayout.Padding = UDim.new(0, 6)
+modeLayout.Parent = modeFrame
+
+local modeButtons = {}
+
+local function createModeButton(text, mode)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0, 110, 1, 0)
+    btn.BackgroundColor3 = Color3.fromRGB(40, 40, 48)
+    btn.Text = text
+    btn.TextColor3 = Color3.fromRGB(200, 200, 210)
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 13
+    btn.Parent = modeFrame
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+
+    modeButtons[mode] = btn
+
+    btn.MouseButton1Click:Connect(function()
+        currentMode = mode
+        for m, b in pairs(modeButtons) do
+            if m == mode then
+                b.BackgroundColor3 = Color3.fromRGB(70, 90, 140)
+                b.TextColor3 = Color3.fromRGB(255, 255, 255)
+            else
+                b.BackgroundColor3 = Color3.fromRGB(40, 40, 48)
+                b.TextColor3 = Color3.fromRGB(200, 200, 210)
+            end
+        end
+        refreshUI()
+    end)
+end
+
+createModeButton("Carved", "Carved")
+createModeButton("Ordinary", "Ordinary")
+createModeButton("All", "All")
+
+-- Подсветка текущего режима
+modeButtons["All"].BackgroundColor3 = Color3.fromRGB(70, 90, 140)
+modeButtons["All"].TextColor3 = Color3.fromRGB(255, 255, 255)
+
+-- Content
 local content = Instance.new("Frame")
-content.Size = UDim2.new(1, -20, 1, -100)
-content.Position = UDim2.new(0, 10, 0, 48)
+content.Size = UDim2.new(1, -20, 1, -140)
+content.Position = UDim2.new(0, 10, 0, 90)
 content.BackgroundTransparency = 1
 content.Parent = main
 
 local listLayout = Instance.new("UIListLayout")
-listLayout.Padding = UDim.new(0, 10)
+listLayout.Padding = UDim.new(0, 8)
 listLayout.Parent = content
 
--- Кнопка света (внизу)
+-- Light button
 local lightBtn = Instance.new("TextButton")
-lightBtn.Size = UDim2.new(1, -20, 0, 36)
-lightBtn.Position = UDim2.new(0, 10, 1, -46)
+lightBtn.Size = UDim2.new(1, -20, 0, 34)
+lightBtn.Position = UDim2.new(0, 10, 1, -44)
 lightBtn.BackgroundColor3 = Color3.fromRGB(50, 40, 40)
-lightBtn.Text = "💡  Убрать свет: ВЫКЛ"
+lightBtn.Text = "Убрать свет: ВЫКЛ"
 lightBtn.TextColor3 = Color3.fromRGB(220, 180, 180)
 lightBtn.Font = Enum.Font.GothamBold
-lightBtn.TextSize = 14
+lightBtn.TextSize = 13
 lightBtn.Parent = main
-
-local lightCorner = Instance.new("UICorner")
-lightCorner.CornerRadius = UDim.new(0, 8)
-lightCorner.Parent = lightBtn
+Instance.new("UICorner", lightBtn).CornerRadius = UDim.new(0, 8)
 
 lightBtn.MouseButton1Click:Connect(function()
     if lightsEnabled then
         stopLightCleaner()
-        lightBtn.Text = "💡  Убрать свет: ВЫКЛ"
+        lightBtn.Text = "Убрать свет: ВЫКЛ"
         lightBtn.BackgroundColor3 = Color3.fromRGB(50, 40, 40)
         lightBtn.TextColor3 = Color3.fromRGB(220, 180, 180)
     else
         startLightCleaner()
-        lightBtn.Text = "💡  Убрать свет: ВКЛ"
+        lightBtn.Text = "Убрать свет: ВКЛ"
         lightBtn.BackgroundColor3 = Color3.fromRGB(40, 60, 40)
         lightBtn.TextColor3 = Color3.fromRGB(180, 255, 180)
     end
@@ -216,18 +276,23 @@ end)
 
 local function createSection(parent, titleText, color, data)
     local section = Instance.new("Frame")
-    section.Size = UDim2.new(1, 0, 0, 170)
+    section.Size = UDim2.new(1, 0, 0, 190)
     section.BackgroundColor3 = Color3.fromRGB(26, 26, 32)
     section.BorderSizePixel = 0
     section.Parent = parent
+    Instance.new("UICorner", section).CornerRadius = UDim.new(0, 10)
 
-    local secCorner = Instance.new("UICorner")
-    secCorner.CornerRadius = UDim.new(0, 10)
-    secCorner.Parent = section
+    local indicator = Instance.new("Frame")
+    indicator.Size = UDim2.new(0, 5, 0, 16)
+    indicator.Position = UDim2.new(0, 10, 0, 10)
+    indicator.BackgroundColor3 = color
+    indicator.BorderSizePixel = 0
+    indicator.Parent = section
+    Instance.new("UICorner", indicator).CornerRadius = UDim.new(0, 3)
 
     local secTitle = Instance.new("TextLabel")
-    secTitle.Size = UDim2.new(1, -16, 0, 28)
-    secTitle.Position = UDim2.new(0, 12, 0, 6)
+    secTitle.Size = UDim2.new(1, -30, 0, 28)
+    secTitle.Position = UDim2.new(0, 22, 0, 6)
     secTitle.BackgroundTransparency = 1
     secTitle.Text = titleText
     secTitle.TextColor3 = color
@@ -237,8 +302,8 @@ local function createSection(parent, titleText, color, data)
     secTitle.Parent = section
 
     local scroll = Instance.new("ScrollingFrame")
-    scroll.Size = UDim2.new(1, -16, 1, -40)
-    scroll.Position = UDim2.new(0, 8, 0, 34)
+    scroll.Size = UDim2.new(1, -12, 1, -40)
+    scroll.Position = UDim2.new(0, 6, 0, 34)
     scroll.BackgroundTransparency = 1
     scroll.BorderSizePixel = 0
     scroll.ScrollBarThickness = 4
@@ -248,7 +313,7 @@ local function createSection(parent, titleText, color, data)
     scroll.Parent = section
 
     local scrollLayout = Instance.new("UIListLayout")
-    scrollLayout.Padding = UDim.new(0, 6)
+    scrollLayout.Padding = UDim.new(0, 5)
     scrollLayout.Parent = scroll
 
     if #data == 0 then
@@ -263,18 +328,16 @@ local function createSection(parent, titleText, color, data)
     else
         for i, pumpkin in ipairs(data) do
             local btn = Instance.new("TextButton")
-            btn.Size = UDim2.new(1, -4, 0, 32)
+            btn.Size = UDim2.new(1, -4, 0, 42)
             btn.BackgroundColor3 = Color3.fromRGB(36, 36, 44)
-            btn.Text = "R"
+            btn.Text = ""
             btn.AutoButtonColor = false
             btn.Parent = scroll
-
-            local btnCorner = Instance.new("UICorner")
-            btnCorner.CornerRadius = UDim.new(0, 8)
-            btnCorner.Parent = btn
+            Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
 
             local rank = Instance.new("TextLabel")
-            rank.Size = UDim2.new(0, 28, 1, 0)
+            rank.Size = UDim2.new(0, 26, 0, 20)
+            rank.Position = UDim2.new(0, 6, 0, 4)
             rank.BackgroundTransparency = 1
             rank.Text = "#" .. i
             rank.TextColor3 = color
@@ -283,15 +346,38 @@ local function createSection(parent, titleText, color, data)
             rank.Parent = btn
 
             local heightLabel = Instance.new("TextLabel")
-            heightLabel.Size = UDim2.new(1, -40, 1, 0)
-            heightLabel.Position = UDim2.new(0, 32, 0, 0)
+            heightLabel.Size = UDim2.new(0, 90, 0, 20)
+            heightLabel.Position = UDim2.new(0, 34, 0, 4)
             heightLabel.BackgroundTransparency = 1
-            heightLabel.Text = string.format("%.2f стадов", pumpkin.Height)
+            heightLabel.Text = string.format("%.2f studs", pumpkin.Height)
             heightLabel.TextColor3 = Color3.fromRGB(230, 230, 240)
-            heightLabel.Font = Enum.Font.Gotham
+            heightLabel.Font = Enum.Font.GothamBold
             heightLabel.TextSize = 13
             heightLabel.TextXAlignment = Enum.TextXAlignment.Left
             heightLabel.Parent = btn
+
+            local typeLabel = Instance.new("TextLabel")
+            typeLabel.Size = UDim2.new(0, 70, 0, 20)
+            typeLabel.Position = UDim2.new(0, 130, 0, 4)
+            typeLabel.BackgroundTransparency = 1
+            typeLabel.Text = pumpkin.Type
+            typeLabel.TextColor3 = pumpkin.Type == "Carved" and Color3.fromRGB(255, 160, 80) or Color3.fromRGB(120, 200, 255)
+            typeLabel.Font = Enum.Font.Gotham
+            typeLabel.TextSize = 12
+            typeLabel.TextXAlignment = Enum.TextXAlignment.Left
+            typeLabel.Parent = btn
+
+            local ownerLabel = Instance.new("TextLabel")
+            ownerLabel.Size = UDim2.new(1, -10, 0, 16)
+            ownerLabel.Position = UDim2.new(0, 8, 0, 22)
+            ownerLabel.BackgroundTransparency = 1
+            ownerLabel.Text = "Owner: " .. pumpkin.Owner
+            ownerLabel.TextColor3 = Color3.fromRGB(160, 160, 170)
+            ownerLabel.Font = Enum.Font.Gotham
+            ownerLabel.TextSize = 11
+            ownerLabel.TextXAlignment = Enum.TextXAlignment.Left
+            ownerLabel.TextTruncate = Enum.TextTruncate.AtEnd
+            ownerLabel.Parent = btn
 
             btn.MouseEnter:Connect(function()
                 TweenService:Create(btn, TweenInfo.new(0.15), {BackgroundColor3 = Color3.fromRGB(50, 50, 62)}):Play()
@@ -303,13 +389,14 @@ local function createSection(parent, titleText, color, data)
             btn.MouseButton1Click:Connect(function()
                 if hrp and hrp.Parent then
                     hrp.CFrame = CFrame.new(pumpkin.Position + Vector3.new(0, pumpkin.Height/2 + 5, 0))
+                    print(string.format("[Pumpkin] %s | %.2f studs | Owner: %s", pumpkin.Type, pumpkin.Height, pumpkin.Owner))
                 end
             end)
         end
     end
 end
 
-local function refreshUI()
+function refreshUI()
     for _, child in ipairs(content:GetChildren()) do
         if not child:IsA("UIListLayout") then
             child:Destroy()
@@ -330,17 +417,17 @@ local function refreshUI()
         table.insert(smallest, pumpkins[i])
     end
 
-    createSection(content, "🔥  Топ-5 самых больших", Color3.fromRGB(255, 140, 60), biggest)
-    createSection(content, "❄️  Топ-5 самых маленьких", Color3.fromRGB(100, 180, 255), smallest)
+    createSection(content, "Топ-5 самых больших", Color3.fromRGB(255, 140, 60), biggest)
+    createSection(content, "Топ-5 самых маленьких", Color3.fromRGB(100, 180, 255), smallest)
 
-    print("Обновлено | Найдено тыкв:", #pumpkins)
+    print("Обновлено | Режим:", currentMode, "| Найдено:", #pumpkins)
 end
 
 refreshUI()
 
 refreshBtn.MouseButton1Click:Connect(function()
     refreshBtn.Text = "..."
-    task.wait(0.15)
+    task.wait(0.12)
     refreshUI()
     refreshBtn.Text = "R"
 end)
