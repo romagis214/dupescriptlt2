@@ -18,7 +18,7 @@ local function isPumpkin(model)
     return false
 end
 
--- Собираем все тыквы
+-- Собираем все тыквы (если папки нет — просто пустой список)
 local pumpkins = {}
 
 if playerModels then
@@ -47,7 +47,7 @@ for i = 1, math.min(5, #pumpkins) do
     table.insert(smallest, pumpkins[i])
 end
 
--- ===== UI =====
+-- ===== UI (грузится всегда) =====
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "PumpkinFinder"
 screenGui.ResetOnSpawn = false
@@ -72,7 +72,7 @@ stroke.Color = Color3.fromRGB(60, 60, 70)
 stroke.Thickness = 1.5
 stroke.Parent = main
 
--- Заголовок (для перетаскивания)
+-- Заголовок
 local titleBar = Instance.new("Frame")
 titleBar.Size = UDim2.new(1, 0, 0, 42)
 titleBar.BackgroundColor3 = Color3.fromRGB(28, 28, 34)
@@ -94,7 +94,7 @@ local title = Instance.new("TextLabel")
 title.Size = UDim2.new(1, -50, 1, 0)
 title.Position = UDim2.new(0, 14, 0, 0)
 title.BackgroundTransparency = 1
-title.Text = "Pumpkin Finder"
+title.Text = "🎃  Pumpkin Finder"
 title.TextColor3 = Color3.fromRGB(255, 200, 80)
 title.Font = Enum.Font.GothamBold
 title.TextSize = 16
@@ -119,7 +119,7 @@ closeBtn.MouseButton1Click:Connect(function()
     screenGui:Destroy()
 end)
 
--- Контейнер контента
+-- Контент
 local content = Instance.new("Frame")
 content.Size = UDim2.new(1, -20, 1, -56)
 content.Position = UDim2.new(0, 10, 0, 48)
@@ -130,8 +130,7 @@ local listLayout = Instance.new("UIListLayout")
 listLayout.Padding = UDim.new(0, 10)
 listLayout.Parent = content
 
--- Функция создания секции
-local function createSection(parent, titleText, color, data, isBig)
+local function createSection(parent, titleText, color, data)
     local section = Instance.new("Frame")
     section.Size = UDim2.new(1, 0, 0, 160)
     section.BackgroundColor3 = Color3.fromRGB(26, 26, 32)
@@ -170,7 +169,7 @@ local function createSection(parent, titleText, color, data, isBig)
 
     if #data == 0 then
         local empty = Instance.new("TextLabel")
-        empty.Size = UDim2.new(1, 0, 0, 30)
+        empty.Size = UDim2.new(1, 0, 0, 40)
         empty.BackgroundTransparency = 1
         empty.Text = "Тыквы не найдены"
         empty.TextColor3 = Color3.fromRGB(120, 120, 130)
@@ -224,14 +223,12 @@ local function createSection(parent, titleText, color, data, isBig)
             end)
         end
     end
-
-    return section
 end
 
-createSection(content, "Топ-5 самых больших", Color3.fromRGB(255, 140, 60), biggest, true)
-createSection(content, "Топ-5 самых маленьких", Color3.fromRGB(100, 180, 255), smallest, false)
+createSection(content, "🔥  Топ-5 самых больших", Color3.fromRGB(255, 140, 60), biggest)
+createSection(content, "❄️  Топ-5 самых маленьких", Color3.fromRGB(100, 180, 255), smallest)
 
--- ===== Drag =====
+-- Drag
 local dragging = false
 local dragStart, startPos
 
