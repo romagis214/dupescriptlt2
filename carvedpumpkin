@@ -144,7 +144,7 @@ local refreshBtn = Instance.new("TextButton")
 refreshBtn.Size = UDim2.new(0, 32, 0, 32)
 refreshBtn.Position = UDim2.new(1, -76, 0, 5)
 refreshBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
-refreshBtn.Text = "↻"
+refreshBtn.Text = "R"
 refreshBtn.TextColor3 = Color3.fromRGB(220, 220, 220)
 refreshBtn.Font = Enum.Font.GothamBold
 refreshBtn.TextSize = 18
@@ -159,7 +159,7 @@ local closeBtn = Instance.new("TextButton")
 closeBtn.Size = UDim2.new(0, 32, 0, 32)
 closeBtn.Position = UDim2.new(1, -38, 0, 5)
 closeBtn.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
-closeBtn.Text = "✕"
+closeBtn.Text = "X"
 closeBtn.TextColor3 = Color3.fromRGB(220, 220, 220)
 closeBtn.Font = Enum.Font.GothamBold
 closeBtn.TextSize = 14
@@ -265,7 +265,7 @@ local function createSection(parent, titleText, color, data)
             local btn = Instance.new("TextButton")
             btn.Size = UDim2.new(1, -4, 0, 32)
             btn.BackgroundColor3 = Color3.fromRGB(36, 36, 44)
-            btn.Text = ""
+            btn.Text = "R"
             btn.AutoButtonColor = false
             btn.Parent = scroll
 
@@ -342,7 +342,7 @@ refreshBtn.MouseButton1Click:Connect(function()
     refreshBtn.Text = "..."
     task.wait(0.15)
     refreshUI()
-    refreshBtn.Text = "↻"
+    refreshBtn.Text = ""
 end)
 
 -- Drag
